@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SavvyMoney</string>
+    <string name="title_activity_main">SavvyMoney</string>
+    <string name="package_name">com.savvymoney.app</string>
+    <string name="custom_url_scheme">com.savvymoney.app</string>
+</resources>

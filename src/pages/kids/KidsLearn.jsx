@@ -1,95 +1,125 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/api/supabaseClient';
 import { useAuth } from '@/hooks/useAuth';
-import { lessons, getLessonById } from '@/lib/lessons';
 import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { KIDS_LESSONS } from '@/lib/lessons';
 
 export default function KidsLearn() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeLesson, setActiveLesson] = useState(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [pickedAnswer, setPickedAnswer] = useState(null);
+  const [result, setResult] = useState(null); // 'correct' | 'wrong'
 
   const { data: progress = [] } = useQuery({
-    queryKey: ['lessonProgress', user?.id],
+    queryKey: ['kidsProgress', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from('lesson_progress').select('*').eq('user_id', user.id);
-      if (error) throw error;
-      return data;
+      const { data } = await supabase.from('lesson_progress').select('*').eq('user_id', user.id);
+      return data || [];
     },
     enabled: !!user,
   });
 
-  const completeMutation = useMutation({
+  const completedIds = new Set(progress.map(p => p.lesson_id));
+
+  const complete = useMutation({
     mutationFn: async ({ lessonId, score }) => {
+      await supabase.from('users').upsert({ id: user.id, email: user.email, role: 'adult' }, { onConflict: 'id' });
       const { error } = await supabase.from('lesson_progress').upsert({
-        user_id: user.id, lesson_id: lessonId, status: 'completed', score, completed_at: new Date().toISOString(),
-      });
+        user_id: user.id, lesson_id: lessonId, status: 'completed', score,
+        completed_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,lesson_id' });
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lessonProgress'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kidsProgress'] }),
   });
 
-  const isCompleted = (id) => progress.some(p => p.lesson_id === id && p.status === 'completed');
-  const kidsLessons = lessons.filter(l => l.category === 'kids');
+  const checkAnswer = () => {
+    if (pickedAnswer === null) return;
+    const correct = pickedAnswer === selected.quiz.answer;
+    const score = correct ? selected.points : Math.floor(selected.points / 2);
+    setResult(correct ? 'correct' : 'wrong');
+    complete.mutate({ lessonId: selected.id, score });
+  };
 
-  if (activeLesson) {
-    const lesson = getLessonById(activeLesson);
-    const step = lesson.content[currentStep];
-    const isLast = currentStep === lesson.content.length - 1;
-
-    return (
-      <div className="p-5 max-w-lg mx-auto">
-        <button onClick={() => { setActiveLesson(null); setCurrentStep(0); }} className="text-sm text-muted-foreground mb-4">← Back</button>
-        <h2 className="text-xl font-bold mb-4">{lesson.icon} {lesson.title}</h2>
-        <div className="bg-card rounded-2xl border-2 border-primary/20 p-5">
-          {step.type === 'text' && <p className="text-sm leading-relaxed">{step.value}</p>}
-          {step.type === 'quiz' && (
-            <div>
-              <p className="font-bold mb-3">🤔 {step.question}</p>
-              <div className="space-y-2">
-                {step.options.map((opt, i) => (
-                  <button key={i} onClick={() => setSelectedAnswer(i)}
-                    className={`w-full text-left p-3 rounded-xl text-sm transition-all ${selectedAnswer === i ? (i === step.answer ? 'bg-green-100 border-green-500 border-2' : 'bg-red-100 border-red-500 border-2') : 'bg-muted hover:bg-muted/80'}`}
-                  >{opt} {selectedAnswer === i && (i === step.answer ? '✅' : '❌')}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="mt-4 flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Step {currentStep + 1} of {lesson.content.length}</span>
-            <Button size="sm" className="rounded-full" onClick={() => {
-              if (isLast) { completeMutation.mutate({ lessonId: activeLesson, score: 100 }); setActiveLesson(null); setCurrentStep(0); }
-              else { setCurrentStep(currentStep + 1); setSelectedAnswer(null); }
-            }}>{isLast ? 'Done! 🎉' : 'Next →'}</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const close = () => { setSelected(null); setPickedAnswer(null); setResult(null); };
 
   return (
     <div className="p-5 max-w-lg mx-auto">
-      <h1 className="text-2xl font-bold mb-5">Learn About Money! 📚</h1>
-      <div className="space-y-3">
-        {kidsLessons.map((lesson) => (
-          <motion.div key={lesson.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={() => setActiveLesson(lesson.id)}
-            className="bg-card rounded-2xl p-4 border-2 border-primary/10 cursor-pointer hover:border-primary/30 transition-all">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">{lesson.icon}</span>
-              <div className="flex-1">
-                <p className="font-bold text-sm">{lesson.title}</p>
-                <p className="text-xs text-muted-foreground">{lesson.description}</p>
-              </div>
-              {isCompleted(lesson.id) ? <span className="text-xl">⭐</span> : <span className="text-xl">▶️</span>}
-            </div>
-          </motion.div>
-        ))}
+      <div className="mb-5">
+        <h1 className="font-heading text-2xl font-800">Learn About Money 📚</h1>
+        <p className="font-body text-sm text-muted-foreground mt-1">Short fun lessons to make you money-smart!</p>
       </div>
+
+      <div className="space-y-3">
+        {KIDS_LESSONS.map((lesson, i) => {
+          const done = completedIds.has(lesson.id);
+          return (
+            <motion.div key={lesson.id} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: i * 0.08 }}
+              onClick={() => !done && setSelected(lesson)}
+              className={`bg-card rounded-2xl p-4 border flex items-center gap-3 transition-all ${done ? 'border-primary/30 bg-primary/5 opacity-80' : 'border-border hover:shadow-md cursor-pointer'}`}>
+              <span className="text-3xl">{lesson.emoji}</span>
+              <div className="flex-1">
+                <p className="font-heading text-sm font-700">{lesson.title}</p>
+                <p className="font-body text-xs text-muted-foreground mt-0.5">{lesson.duration} · {lesson.points} pts</p>
+              </div>
+              {done && <span className="text-xl">✅</span>}
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Lesson dialog */}
+      <Dialog open={!!selected} onOpenChange={close}>
+        <DialogContent className="rounded-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">{selected?.emoji} {selected?.title}</DialogTitle>
+          </DialogHeader>
+
+          {!result ? (
+            <>
+              <p className="font-body text-sm whitespace-pre-line text-foreground leading-relaxed">{selected?.content}</p>
+
+              {selected?.quiz && (
+                <div className="bg-muted/50 rounded-xl p-4 mt-2 space-y-3">
+                  <p className="font-heading text-sm font-700">Quick Quiz! 🧠</p>
+                  <p className="font-body text-sm">{selected.quiz.question}</p>
+                  <div className="space-y-2">
+                    {selected.quiz.options.map((opt, i) => (
+                      <button key={i} onClick={() => setPickedAnswer(i)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-body border transition-all ${pickedAnswer === i ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-muted'}`}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  <Button onClick={checkAnswer} disabled={pickedAnswer === null || complete.isPending} className="w-full rounded-xl font-heading">
+                    Check Answer ✅
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center py-6 space-y-3">
+              <div className="text-5xl">{result === 'correct' ? '🎉' : '😅'}</div>
+              <p className={`font-heading text-xl font-800 ${result === 'correct' ? 'text-primary' : 'text-foreground'}`}>
+                {result === 'correct' ? 'Correct!' : 'Not quite!'}
+              </p>
+              {result === 'correct' ? (
+                <p className="font-body text-sm text-muted-foreground">You earned <strong className="text-primary">{selected?.points} points</strong>! 🌟</p>
+              ) : (
+                <>
+                  <p className="font-body text-sm text-muted-foreground">The correct answer was: <strong>{selected?.quiz.options[selected?.quiz.answer]}</strong></p>
+                  <p className="font-body text-xs text-muted-foreground">You still earned {Math.floor((selected?.points || 0) / 2)} points for trying!</p>
+                </>
+              )}
+              <Button onClick={close} className="w-full rounded-xl font-heading mt-2">Continue 🚀</Button>
+            </motion.div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

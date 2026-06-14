@@ -5,29 +5,47 @@ const AuthContext = createContext({});
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    const fetchProfile = async (userId) => {
+        if (!userId) { setProfile(null); return; }
+        const { data } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+        setProfile(data || null);
+    };
+
     useEffect(() => {
-        // Check active sessions and sets the user
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
-            setLoading(false);
+            const u = session?.user ?? null;
+            setUser(u);
+            fetchProfile(u?.id).finally(() => setLoading(false));
         });
 
-        // Listen for changes on auth state (logged in, signed out, etc.)
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-            setLoading(false);
+            const u = session?.user ?? null;
+            setUser(u);
+            fetchProfile(u?.id);
         });
 
         return () => subscription.unsubscribe();
     }, []);
+
+    const updateProfile = async (data) => {
+        if (!user) return;
+        const { error } = await supabase.from('users').upsert({ id: user.id, ...data });
+        if (!error) await fetchProfile(user.id);
+        return { error };
+    };
 
     const value = {
         signUp: (data) => supabase.auth.signUp(data),
         signIn: (data) => supabase.auth.signInWithPassword(data),
         signOut: () => supabase.auth.signOut(),
         user,
+        profile,
+        loading,
+        updateProfile,
+        refreshProfile: () => fetchProfile(user?.id),
     };
 
     return (
@@ -37,6 +55,4 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-export const useAuth = () => {
-    return useContext(AuthContext);
-};
+export const useAuth = () => useContext(AuthContext);

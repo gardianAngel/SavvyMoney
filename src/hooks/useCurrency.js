@@ -1,17 +1,34 @@
-import { useState } from 'react';
+import { useAuth } from './useAuth';
 
-// Simple currency hook - defaults to USD
+export const CURRENCIES = [
+  { country: 'Nigeria', flag: '🇳🇬', currency: 'NGN', symbol: '₦' },
+  { country: 'Ghana', flag: '🇬🇭', currency: 'GHS', symbol: '₵' },
+  { country: 'Kenya', flag: '🇰🇪', currency: 'KES', symbol: 'KSh' },
+  { country: 'South Africa', flag: '🇿🇦', currency: 'ZAR', symbol: 'R' },
+  { country: 'Uganda', flag: '🇺🇬', currency: 'UGX', symbol: 'USh' },
+  { country: 'Tanzania', flag: '🇹🇿', currency: 'TZS', symbol: 'TSh' },
+  { country: 'Ethiopia', flag: '🇪🇹', currency: 'ETB', symbol: 'Br' },
+  { country: 'Egypt', flag: '🇪🇬', currency: 'EGP', symbol: 'E£' },
+  { country: 'United States', flag: '🇺🇸', currency: 'USD', symbol: '$' },
+  { country: 'United Kingdom', flag: '🇬🇧', currency: 'GBP', symbol: '£' },
+  { country: 'Canada', flag: '🇨🇦', currency: 'CAD', symbol: 'CA$' },
+  { country: 'Australia', flag: '🇦🇺', currency: 'AUD', symbol: 'A$' },
+  { country: 'India', flag: '🇮🇳', currency: 'INR', symbol: '₹' },
+  { country: 'Europe', flag: '🇪🇺', currency: 'EUR', symbol: '€' },
+  { country: 'Brazil', flag: '🇧🇷', currency: 'BRL', symbol: 'R$' },
+  { country: 'Mexico', flag: '🇲🇽', currency: 'MXN', symbol: 'MX$' },
+  { country: 'China', flag: '🇨🇳', currency: 'CNY', symbol: '¥' },
+  { country: 'Japan', flag: '🇯🇵', currency: 'JPY', symbol: '¥' },
+];
+
 export function useCurrency() {
-  const [currency] = useState('USD');
+  const { profile } = useAuth();
 
-  const currencyMap = {
-    USD: { symbol: '$', code: 'USD', name: 'US Dollar' },
-    EUR: { symbol: '€', code: 'EUR', name: 'Euro' },
-    GBP: { symbol: '£', code: 'GBP', name: 'British Pound' },
-    NGN: { symbol: '₦', code: 'NGN', name: 'Nigerian Naira' },
-    KES: { symbol: 'KSh', code: 'KES', name: 'Kenyan Shilling' },
-    ZAR: { symbol: 'R', code: 'ZAR', name: 'South African Rand' },
-  };
+  const symbol = profile?.currency_symbol || '₦';
+  const currency = profile?.currency || 'NGN';
+  const country = profile?.country || 'Nigeria';
 
-  return currencyMap[currency] || currencyMap.USD;
+  const format = (amount) => `${symbol}${Number(amount || 0).toLocaleString()}`;
+
+  return { symbol, currency, country, format };
 }

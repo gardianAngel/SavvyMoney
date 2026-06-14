@@ -7,6 +7,14 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        heading: ['Nunito', 'sans-serif'],
+        body: ['Inter', 'sans-serif'],
+      },
+      fontWeight: {
+        '800': '800',
+        '900': '900',
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
