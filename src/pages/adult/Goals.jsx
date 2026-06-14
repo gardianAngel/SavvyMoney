@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useAuth } from '@/hooks/useAuth';
 
 const GOAL_ICONS = ['🏠', '📱', '💼', '🎓', '🚗', '✈️', '🆘', '💰', '🎯', '🛍️'];
 
@@ -17,24 +18,26 @@ export default function Goals() {
     const [depositAmount, setDepositAmount] = useState('');
     const queryClient = useQueryClient();
     const { symbol } = useCurrency();
+    const { user } = useAuth();
 
     const { data: goals = [] } = useQuery({
-        queryKey: ['savingsGoals'],
+        queryKey: ['savingsGoals', user?.id],
         queryFn: async () => {
-            const { data, error } = await supabase.from('savings_goals').select('*').order('created_date', { ascending: false }).limit(20);
+            const { data, error } = await supabase.from('savings_goals').select('*').eq('user_id', user.id).order('created_date', { ascending: false }).limit(20);
             if (error) throw error;
             return data;
         },
+        enabled: !!user,
     });
 
     const createGoal = useMutation({
         mutationFn: async (data) => {
-            const { data: result, error } = await supabase.from('savings_goals').insert([data]);
+            const { data: result, error } = await supabase.from('savings_goals').insert([{ ...data, user_id: user.id }]);
             if (error) throw error;
             return result;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['savingsGoals'] });
+            queryClient.invalidateQueries({ queryKey: ['savingsGoals', user?.id] });
             setShowCreate(false);
             setNewGoal({ title: '', target_amount: '', icon: '💰', deadline: '' });
         }
@@ -42,12 +45,12 @@ export default function Goals() {
 
     const updateGoal = useMutation({
         mutationFn: async ({ id, data }) => {
-            const { data: result, error } = await supabase.from('savings_goals').update(data).eq('id', id);
+            const { data: result, error } = await supabase.from('savings_goals').update(data).eq('id', id).eq('user_id', user.id);
             if (error) throw error;
             return result;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['savingsGoals'] });
+            queryClient.invalidateQueries({ queryKey: ['savingsGoals', user?.id] });
             setShowDeposit(null);
             setDepositAmount('');
         }
@@ -55,11 +58,11 @@ export default function Goals() {
 
     const deleteGoal = useMutation({
         mutationFn: async (id) => {
-            const { data: result, error } = await supabase.from('savings_goals').delete().eq('id', id);
+            const { data: result, error } = await supabase.from('savings_goals').delete().eq('id', id).eq('user_id', user.id);
             if (error) throw error;
             return result;
         },
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['savingsGoals'] }),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['savingsGoals', user?.id] }),
     });
 
     const handleDeposit = (goal) => {
