@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,11 +20,19 @@ export default function Goals() {
 
     const { data: goals = [] } = useQuery({
         queryKey: ['savingsGoals'],
-        queryFn: () => base44.entities.SavingsGoal.list('-created_date', 20),
+        queryFn: async () => {
+            const { data, error } = await supabase.from('savings_goals').select('*').order('created_date', { ascending: false }).limit(20);
+            if (error) throw error;
+            return data;
+        },
     });
 
     const createGoal = useMutation({
-        mutationFn: (data) => base44.entities.SavingsGoal.create(data),
+        mutationFn: async (data) => {
+            const { data: result, error } = await supabase.from('savings_goals').insert([data]);
+            if (error) throw error;
+            return result;
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['savingsGoals'] });
             setShowCreate(false);
@@ -33,7 +41,11 @@ export default function Goals() {
     });
 
     const updateGoal = useMutation({
-        mutationFn: ({ id, data }) => base44.entities.SavingsGoal.update(id, data),
+        mutationFn: async ({ id, data }) => {
+            const { data: result, error } = await supabase.from('savings_goals').update(data).eq('id', id);
+            if (error) throw error;
+            return result;
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['savingsGoals'] });
             setShowDeposit(null);
@@ -42,7 +54,11 @@ export default function Goals() {
     });
 
     const deleteGoal = useMutation({
-        mutationFn: (id) => base44.entities.SavingsGoal.delete(id),
+        mutationFn: async (id) => {
+            const { data: result, error } = await supabase.from('savings_goals').delete().eq('id', id);
+            if (error) throw error;
+            return result;
+        },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['savingsGoals'] }),
     });
 
