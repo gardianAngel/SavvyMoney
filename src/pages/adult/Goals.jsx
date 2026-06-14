@@ -16,6 +16,7 @@ export default function Goals() {
     const [showDeposit, setShowDeposit] = useState(null);
     const [newGoal, setNewGoal] = useState({ title: '', target_amount: '', icon: '💰', deadline: '' });
     const [depositAmount, setDepositAmount] = useState('');
+    const [createError, setCreateError] = useState(null);
     const queryClient = useQueryClient();
     const { symbol } = useCurrency();
     const { user } = useAuth();
@@ -32,15 +33,27 @@ export default function Goals() {
 
     const createGoal = useMutation({
         mutationFn: async (data) => {
-            const { data: result, error } = await supabase.from('savings_goals').insert([{ ...data, user_id: user.id }]);
+            // Ensure public.users row exists — auth signup only creates auth.users
+            // savings_goals.user_id has a FK to public.users(id)
+            await supabase.from('users').upsert(
+                { id: user.id, email: user.email, full_name: user.user_metadata?.full_name || '', role: 'adult' },
+                { onConflict: 'id' }
+            );
+            const { data: result, error } = await supabase
+                .from('savings_goals')
+                .insert([{ ...data, user_id: user.id }]);
             if (error) throw error;
             return result;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['savingsGoals', user?.id] });
             setShowCreate(false);
+            setCreateError(null);
             setNewGoal({ title: '', target_amount: '', icon: '💰', deadline: '' });
-        }
+        },
+        onError: (err) => {
+            setCreateError(err.message || 'Failed to create goal. Please try again.');
+        },
     });
 
     const updateGoal = useMutation({
@@ -202,12 +215,15 @@ export default function Goals() {
                             onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
                             className="rounded-xl font-body"
                         />
+                        {createError && (
+                            <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">⚠️ {createError}</p>
+                        )}
                         <Button
-                            onClick={() => createGoal.mutate({ ...newGoal, target_amount: Number(newGoal.target_amount), saved_amount: 0, status: 'active' })}
+                            onClick={() => { setCreateError(null); createGoal.mutate({ ...newGoal, target_amount: Number(newGoal.target_amount), saved_amount: 0, status: 'active' }); }}
                             className="w-full rounded-xl font-heading"
-                            disabled={!newGoal.title || !newGoal.target_amount}
+                            disabled={!newGoal.title || !newGoal.target_amount || createGoal.isPending}
                         >
-                            Create Goal 🎯
+                            {createGoal.isPending ? 'Saving...' : 'Create Goal 🎯'}
                         </Button>
                     </div>
                 </DialogContent>
